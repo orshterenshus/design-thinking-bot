@@ -1,7 +1,5 @@
-[00:00:04.419] Server  LOG      ✓ Ready in 3.8s
-[00:00:14.935] Server  LOG      ○ Compiling / ...
-[00:00:17.508] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:00:17.593] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:00:22.230] Server  LOG      ○ Compiling /login ...
-[00:23:46.970] Server  LOG        Reload env: .env.local
-[00:23:47.686] Server  LOG        Reload env: .env.local
+[00:00:01.489] Server  LOG      ✓ Ready in 967ms
+[00:02:22.901] Server  LOG     Login attempt for user: "rafi"
+[00:04:51.438] Server  LOG     Login attempt for user: null
+[00:05:47.503] Server  LOG      ✓ Compiled in 190ms
+[00:06:07.395] Server  LOG      ✓ Compiled in 133ms

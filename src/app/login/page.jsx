@@ -25,7 +25,7 @@ export default function LoginPage() {
             });
 
             const data = await res.json();
-
+            
             if (res.ok) {
                 setSuccess('Login successful!');
                 localStorage.setItem('currentUser', JSON.stringify(data.user));
@@ -68,7 +68,7 @@ export default function LoginPage() {
                     <br />
                     <button
                         type="submit"
-                        className="w-full p-3 bg-blue-500 text-white rounded hover:bg-blue-600"
+                        className="w-full p-3 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer"
                     >
                         Login
                     </button>
