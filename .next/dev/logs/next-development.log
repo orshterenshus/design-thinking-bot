@@ -1,15 +1,15 @@
-[00:00:02.089] Server  LOG      ✓ Ready in 1395ms
-[00:00:05.176] Server  LOG      ○ Compiling /login ...
-[00:00:07.460] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-[00:00:12.634] Server  LOG     Env Check: "Defined"
-[00:00:15.439] Server  LOG     ----------------------------------------
-[00:00:15.440] Server  LOG     ✅ MongoDB Connected Successfully to: design-thinking-bot
-[00:00:15.440] Server  LOG     ----------------------------------------
-[00:00:15.446] Server  LOG     ------------------------------------------------
-[00:00:15.447] Server  LOG     🔍 Login Attempt:
-[00:00:15.448] Server  LOG        Username/Email: "lala@gmail.com"
-[00:00:15.448] Server  LOG        Password Input: "1234"
-[00:00:16.987] Server  LOG        ✅ User found in DB: lala
-[00:00:16.988] Server  LOG        🔑 DB Password: "1234"
-[00:00:16.989] Server  LOG        ❓ Match? true
-[00:00:16.989] Server  LOG     ------------------------------------------------
+[00:00:01.768] Server  LOG      ✓ Ready in 1102ms
+[00:00:07.900] Server  LOG      ○ Compiling /project-management ...
+[00:00:14.890] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:00:19.159] Server  LOG     Env Check: "Defined"
+[00:00:21.838] Server  LOG     ----------------------------------------
+[00:00:21.839] Server  LOG     ✅ MongoDB Connected Successfully to: design-thinking-bot
+[00:00:21.840] Server  LOG     ----------------------------------------
+[00:00:21.844] Server  LOG     ------------------------------------------------
+[00:00:21.844] Server  LOG     🔍 Login Attempt:
+[00:00:21.845] Server  LOG        Username/Email: "lala@gmail.com"
+[00:00:21.846] Server  LOG        Password Input: "1234"
+[00:00:23.473] Server  LOG        ✅ User found in DB: lala
+[00:00:23.475] Server  LOG        🔑 DB Password: "1234"
+[00:00:23.476] Server  LOG        ❓ Match? true
+[00:00:23.476] Server  LOG     ------------------------------------------------
