@@ -1,2 +1,0 @@
-[00:00:00.898] Server  LOG      ✓ Ready in 594ms
-[00:00:08.770] Browser ERROR   uncaughtError: Error: An unexpected Turbopack error occurred. Please see the output of `next dev` for more details.
