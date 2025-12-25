@@ -3,10 +3,24 @@ import dbConnect from '@/lib/db';
 import Project from '@/models/Project';
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(request) {
     try {
         await dbConnect();
-        const projects = await Project.find({}).sort({ createdAt: -1 });
+
+        // Get current user from header (set by frontend)
+        const currentUser = request.headers.get('X-Current-User');
+
+        let query = {};
+        if (currentUser) {
+            query = {
+                $or: [
+                    { createdBy: currentUser },
+                    { sharedWith: currentUser }
+                ]
+            };
+        }
+
+        const projects = await Project.find(query).sort({ createdAt: -1 });
         return NextResponse.json(projects);
     } catch (error) {
         return NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 });

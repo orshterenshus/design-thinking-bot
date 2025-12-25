@@ -3,6 +3,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import SharePopover from '@/components/SharePopover';
 
 function ProjectContent() {
     const searchParams = useSearchParams();
@@ -10,6 +11,7 @@ function ProjectContent() {
 
     const initialName = searchParams.get('name') || 'Project';
     const initialPhase = searchParams.get('phase') || 'Empathize';
+    const projectId = searchParams.get('id');
 
     const [currentPhase, setCurrentPhase] = useState(initialPhase);
     const [messages, setMessages] = useState([
@@ -59,6 +61,8 @@ function ProjectContent() {
             setFiles(prev => [...prev, ...newFiles]);
         }
     };
+
+
 
     const getStepClass = (stepPhase) => {
         const steps = ['Empathize', 'Define', 'Ideate', 'Prototype', 'Test'];
@@ -115,9 +119,16 @@ function ProjectContent() {
                     <div className="bg-white rounded-lg shadow p-6 mb-6">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xl font-bold text-gray-800">Phase: {currentPhase}</h3>
-                            <button className="flex items-center gap-2 text-sm bg-indigo-50 text-indigo-700 px-3 py-2 rounded-md hover:bg-indigo-100 transition-colors">
-                                Share Project
-                            </button>
+                            <SharePopover
+                                projectId={projectId}
+                                triggerButton={
+                                    <button
+                                        className="flex items-center gap-2 text-sm bg-indigo-50 text-indigo-700 px-3 py-2 rounded-md hover:bg-indigo-100 transition-colors"
+                                    >
+                                        Share Project
+                                    </button>
+                                }
+                            />
                         </div>
 
                         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50 transition-colors"
@@ -184,6 +195,7 @@ function ProjectContent() {
                     </div>
                 </aside>
             </div>
+
         </div>
     );
 }
