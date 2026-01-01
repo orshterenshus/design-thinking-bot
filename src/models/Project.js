@@ -19,6 +19,25 @@ const ProjectSchema = new mongoose.Schema({
         type: [String],
         default: [],
     },
+    chatHistory: [{
+        sender: {
+            type: String,
+            enum: ['Bot', 'You'],
+            required: true,
+        },
+        text: {
+            type: String,
+            required: true,
+        },
+        timestamp: {
+            type: Date,
+            default: Date.now,
+        },
+        phase: {
+            type: String,
+            enum: ['Empathize', 'Define', 'Ideate', 'Prototype', 'Test'],
+        },
+    }],
     createdAt: {
         type: Date,
         default: Date.now,
