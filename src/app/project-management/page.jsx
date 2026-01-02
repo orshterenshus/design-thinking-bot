@@ -24,12 +24,15 @@ export default function ProjectManagementPage() {
         setCurrentUser(user);
 
         // Fetch projects
-        fetchProjects();
+        fetchProjects(user);
     }, [router]);
 
-    const fetchProjects = async () => {
+    const fetchProjects = async (userOverride) => {
+        const userToUse = userOverride || currentUser;
+        if (!userToUse) return;
+
         try {
-            const res = await fetch('/api/projects');
+            const res = await fetch(`/api/projects?user=${encodeURIComponent(userToUse.username)}`);
             if (res.ok) {
                 const data = await res.json();
                 setProjects(data);
@@ -109,7 +112,7 @@ export default function ProjectManagementPage() {
                         ) : (
                             projects.map((project) => (
                                 <div
-                                    key={project.id}
+                                    key={project._id}
                                     className="p-4 border rounded shadow-sm hover:shadow-md transition bg-gray-50 cursor-pointer"
                                     onClick={() => navigateToProject(project)}
                                 >

@@ -3,10 +3,19 @@ import dbConnect from '@/lib/db';
 import Project from '@/models/Project';
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(request) {
     try {
         await dbConnect();
-        const projects = await Project.find({}).sort({ createdAt: -1 });
+        const { searchParams } = new URL(request.url);
+        const user = searchParams.get('user');
+
+        const query = user ? {
+            $or: [
+                { createdBy: user },
+                { 'sharedWith.user': user }
+            ]
+        } : {};
+        const projects = await Project.find(query).sort({ createdAt: -1 });
         return NextResponse.json(projects);
     } catch (error) {
         return NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 });
