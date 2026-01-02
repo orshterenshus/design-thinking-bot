@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import SharePopover from '@/components/SharePopover';
 
 export default function ProjectManagementPage() {
     const [projects, setProjects] = useState([]);
@@ -12,6 +13,10 @@ export default function ProjectManagementPage() {
 
     const [projectName, setProjectName] = useState('');
     const [projectPhase, setProjectPhase] = useState('Empathize');
+
+    // Modal State
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [projectToShare, setProjectToShare] = useState(null);
 
     useEffect(() => {
         // Check authentication
@@ -23,16 +28,30 @@ export default function ProjectManagementPage() {
         const user = JSON.parse(userStr);
         setCurrentUser(user);
 
+
         // Fetch projects
-        fetchProjects(user);
+        if (currentUser) {
+            // We need to call fetchProjects here or inside a separate useEffect dependent on currentUser
+            // But since fetchProjects relies on currentUser state which might not be set immediately if we just set it...
+            // actually currentUser is set above.
+        }
     }, [router]);
 
-    const fetchProjects = async (userOverride) => {
-        const userToUse = userOverride || currentUser;
-        if (!userToUse) return;
+    // Effect to fetch projects once currentUser is set
+    useEffect(() => {
+        if (currentUser) {
+            fetchProjects();
+        }
+    }, [currentUser]);
 
+    const fetchProjects = async () => {
+        if (!currentUser) return;
         try {
-            const res = await fetch(`/api/projects?user=${encodeURIComponent(userToUse.username)}`);
+            const res = await fetch('/api/projects', {
+                headers: {
+                    'X-Current-User': currentUser.username
+                }
+            });
             if (res.ok) {
                 const data = await res.json();
                 setProjects(data);
@@ -76,6 +95,7 @@ export default function ProjectManagementPage() {
 
     const navigateToProject = (project) => {
         const params = new URLSearchParams({
+            id: project._id,
             name: project.name,
             phase: project.phase
         });
@@ -113,14 +133,29 @@ export default function ProjectManagementPage() {
                             projects.map((project) => (
                                 <div
                                     key={project._id}
-                                    className="p-4 border rounded shadow-sm hover:shadow-md transition bg-gray-50 cursor-pointer"
+                                    className="p-4 border rounded shadow-sm hover:shadow-md transition bg-gray-50 cursor-pointer relative"
                                     onClick={() => navigateToProject(project)}
                                 >
                                     <h3 className="font-bold text-lg">{project.name}</h3>
                                     <p className="text-gray-600">Phase: {project.phase}</p>
                                     <div className="mt-2 text-sm text-gray-500 flex gap-2">
                                         <button className="text-blue-500 hover:underline">Open</button>
+                                        <SharePopover
+                                            projectId={project._id}
+                                            onShareSuccess={fetchProjects}
+                                            triggerButton={
+                                                <button className="text-green-500 hover:underline">
+                                                    Share
+                                                </button>
+                                            }
+                                        />
                                     </div>
+                                    {/* Shared Badge */}
+                                    {currentUser && project.createdBy !== currentUser.username && (
+                                        <div className="absolute top-2 right-2 bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full font-semibold">
+                                            Shared with me
+                                        </div>
+                                    )}
                                 </div>
                             ))
                         )}
@@ -163,6 +198,7 @@ export default function ProjectManagementPage() {
                     </form>
                 </div>
             </div>
+
         </div>
     );
 }

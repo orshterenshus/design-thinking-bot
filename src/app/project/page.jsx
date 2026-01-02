@@ -3,6 +3,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import SharePopover from '@/components/SharePopover';
 
 function ProjectContent() {
     const searchParams = useSearchParams();
@@ -10,43 +11,151 @@ function ProjectContent() {
 
     const initialName = searchParams.get('name') || 'Project';
     const initialPhase = searchParams.get('phase') || 'Empathize';
+    const projectId = searchParams.get('id');
 
     const [currentPhase, setCurrentPhase] = useState(initialPhase);
-    const [messages, setMessages] = useState([
-        { sender: 'Bot', text: `Hello! I am the Socratic Bot accompanying the project. Currently, we are in the <strong>${initialPhase}</strong> phase. <br><br>How can you enter your user's inner circle?` }
-    ]);
+    const [messages, setMessages] = useState([]);
     const [chatInput, setChatInput] = useState('');
     const [files, setFiles] = useState([]);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
+    // Helper function to save a message to the database
+    const saveMessageToDb = async (message) => {
+        if (!projectId) return;
+        try {
+            await fetch(`/api/projects/${projectId}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(message),
+            });
+        } catch (error) {
+            console.error('Failed to save message:', error);
+        }
+    };
+
+    // Fetch chat history on component mount
     useEffect(() => {
-        // In a real app, we would fetch project details by ID here
-    }, []);
+        const fetchChatHistory = async () => {
+            if (!projectId) {
+                setIsLoadingHistory(false);
+                // Show welcome message if no project ID
+                setMessages([{
+                    sender: 'Bot',
+                    text: `Hello! I am the Socratic Bot accompanying the project. Currently, we are in the <strong>${initialPhase}</strong> phase. <br><br>How can you enter your user's inner circle?`
+                }]);
+                return;
+            }
 
-    const changePhase = (phase) => {
+            try {
+                const response = await fetch(`/api/projects/${projectId}/messages`);
+                const data = await response.json();
+
+                if (data.chatHistory && data.chatHistory.length > 0) {
+                    setMessages(data.chatHistory);
+                } else {
+                    // No history — send and save welcome message
+                    const welcomeMessage = {
+                        sender: 'Bot',
+                        text: `Hello! I am the Socratic Bot accompanying the project. Currently, we are in the <strong>${initialPhase}</strong> phase. <br><br>How can you enter your user's inner circle?`,
+                        phase: initialPhase,
+                        timestamp: new Date(),
+                    };
+                    setMessages([welcomeMessage]);
+                    await saveMessageToDb(welcomeMessage);
+                }
+            } catch (error) {
+                console.error('Failed to fetch chat history:', error);
+                // Fallback to welcome message on error
+                setMessages([{
+                    sender: 'Bot',
+                    text: `Hello! I am the Socratic Bot accompanying the project. Currently, we are in the <strong>${initialPhase}</strong> phase. <br><br>How can you enter your user's inner circle?`
+                }]);
+            } finally {
+                setIsLoadingHistory(false);
+            }
+        };
+
+        fetchChatHistory();
+    }, [projectId, initialPhase]);
+
+    const changePhase = async (phase) => {
         const formattedPhase = phase.charAt(0).toUpperCase() + phase.slice(1);
         setCurrentPhase(formattedPhase);
 
-        setMessages(prev => [...prev, {
+        const phaseMessage = {
             sender: 'Bot',
-            text: `Switched to <strong>${formattedPhase}</strong> phase. What are your goals for this step?`
-        }]);
+            text: `Switched to <strong>${formattedPhase}</strong> phase. What are your goals for this step?`,
+            phase: formattedPhase,
+            timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, phaseMessage]);
+        await saveMessageToDb(phaseMessage);
     };
 
-    const sendMessage = (e) => {
+    const [isTyping, setIsTyping] = useState(false);
+
+    const sendMessage = async (e) => {
         e.preventDefault();
-        if (!chatInput.trim()) return;
+        if (!chatInput.trim() || isTyping) return;
 
-        setMessages(prev => [...prev, { sender: 'You', text: chatInput }]);
+        const userMessage = {
+            sender: 'You',
+            text: chatInput,
+            phase: currentPhase,
+            timestamp: new Date(),
+        };
 
+        setMessages(prev => [...prev, userMessage]);
         const userText = chatInput;
         setChatInput('');
 
-        setTimeout(() => {
-            let botReply = "That's an interesting perspective. Tell me more.";
-            if (userText.toLowerCase().includes('hello')) botReply = "Hi there! Ready to design?";
+        // Save user message to database
+        await saveMessageToDb(userMessage);
 
-            setMessages(prev => [...prev, { sender: 'Bot', text: botReply }]);
-        }, 1000);
+        // Call Gemini API for response
+        setIsTyping(true);
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: userText,
+                    phase: currentPhase,
+                    conversationHistory: messages.slice(-10), // Last 10 messages for context
+                }),
+            });
+
+            const data = await response.json();
+
+            let botReplyText;
+            if (response.ok && data.reply) {
+                botReplyText = data.reply;
+            } else {
+                botReplyText = data.error || "I'm having trouble responding right now. Please try again.";
+            }
+
+            const botMessage = {
+                sender: 'Bot',
+                text: botReplyText,
+                phase: currentPhase,
+                timestamp: new Date(),
+            };
+
+            setMessages(prev => [...prev, botMessage]);
+            await saveMessageToDb(botMessage);
+        } catch (error) {
+            console.error('Failed to get AI response:', error);
+            const errorMessage = {
+                sender: 'Bot',
+                text: "I'm having trouble connecting. Please check your connection and try again.",
+                phase: currentPhase,
+                timestamp: new Date(),
+            };
+            setMessages(prev => [...prev, errorMessage]);
+            await saveMessageToDb(errorMessage);
+        } finally {
+            setIsTyping(false);
+        }
     };
 
     const handleFileUpload = (e) => {
@@ -59,6 +168,8 @@ function ProjectContent() {
             setFiles(prev => [...prev, ...newFiles]);
         }
     };
+
+
 
     const getStepClass = (stepPhase) => {
         const steps = ['Empathize', 'Define', 'Ideate', 'Prototype', 'Test'];
@@ -115,9 +226,16 @@ function ProjectContent() {
                     <div className="bg-white rounded-lg shadow p-6 mb-6">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xl font-bold text-gray-800">Phase: {currentPhase}</h3>
-                            <button className="flex items-center gap-2 text-sm bg-indigo-50 text-indigo-700 px-3 py-2 rounded-md hover:bg-indigo-100 transition-colors">
-                                Share Project
-                            </button>
+                            <SharePopover
+                                projectId={projectId}
+                                triggerButton={
+                                    <button
+                                        className="flex items-center gap-2 text-sm bg-indigo-50 text-indigo-700 px-3 py-2 rounded-md hover:bg-indigo-100 transition-colors"
+                                    >
+                                        Share Project
+                                    </button>
+                                }
+                            />
                         </div>
 
                         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50 transition-colors"
@@ -156,16 +274,32 @@ function ProjectContent() {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-                        {messages.map((msg, i) => (
-                            <div key={i} className="flex items-start">
-                                <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${msg.sender === 'Bot' ? 'bg-blue-600' : 'bg-green-500'}`}>
-                                    {msg.sender === 'Bot' ? 'Bot' : 'You'}
+                        {isLoadingHistory ? (
+                            <div className="flex items-center justify-center h-full">
+                                <div className="text-gray-500 text-sm">Loading chat history...</div>
+                            </div>
+                        ) : (
+                            messages.map((msg, i) => (
+                                <div key={i} className="flex items-start">
+                                    <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${msg.sender === 'Bot' ? 'bg-blue-600' : 'bg-green-500'}`}>
+                                        {msg.sender === 'Bot' ? 'Bot' : 'You'}
+                                    </div>
+                                    <div className="ml-3 bg-white p-3 rounded-lg shadow-sm text-sm text-gray-700 border border-gray-100"
+                                        dangerouslySetInnerHTML={{ __html: msg.text }}>
+                                    </div>
                                 </div>
-                                <div className="ml-3 bg-white p-3 rounded-lg shadow-sm text-sm text-gray-700 border border-gray-100"
-                                    dangerouslySetInnerHTML={{ __html: msg.text }}>
+                            ))
+                        )}
+                        {isTyping && (
+                            <div className="flex items-start">
+                                <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold bg-blue-600">
+                                    Bot
+                                </div>
+                                <div className="ml-3 bg-white p-3 rounded-lg shadow-sm text-sm text-gray-500 border border-gray-100">
+                                    <span className="animate-pulse">Thinking...</span>
                                 </div>
                             </div>
-                        ))}
+                        )}
                     </div>
 
                     <div className="p-4 border-t border-gray-200 bg-white">
@@ -184,6 +318,7 @@ function ProjectContent() {
                     </div>
                 </aside>
             </div>
+
         </div>
     );
 }

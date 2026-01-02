@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 export async function GET(request) {
     try {
         await dbConnect();
+<<<<<<< HEAD
         const { searchParams } = new URL(request.url);
         const user = searchParams.get('user');
 
@@ -15,6 +16,22 @@ export async function GET(request) {
                 { 'sharedWith.user': user }
             ]
         } : {};
+=======
+
+        // Get current user from header (set by frontend)
+        const currentUser = request.headers.get('X-Current-User');
+
+        let query = {};
+        if (currentUser) {
+            query = {
+                $or: [
+                    { createdBy: currentUser },
+                    { sharedWith: currentUser }
+                ]
+            };
+        }
+
+>>>>>>> gil
         const projects = await Project.find(query).sort({ createdAt: -1 });
         return NextResponse.json(projects);
     } catch (error) {
