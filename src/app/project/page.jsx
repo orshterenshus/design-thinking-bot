@@ -4,6 +4,57 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import SharePopover from '@/components/SharePopover';
+import EmpathyMap from '@/components/EmpathyMap';
+import StageChecklist from '@/components/StageChecklist';
+
+// Phase-specific information for the chatbot
+const PHASE_INFO = {
+    'Empathize': {
+        tools: ['Empathy Maps', 'User Interviews', 'Observation Notes'],
+        capabilities: 'building Empathy Maps, conducting user interviews, and understanding what your users See, Think, Do, and Feel',
+        firstQuestion: 'How can you enter your user\'s inner circle?'
+    },
+    'Define': {
+        tools: ['User Personas', 'How Might We (HMW) statements', 'Problem Statements'],
+        capabilities: 'creating User Personas, crafting HMW statements, and defining the core problem',
+        firstQuestion: 'How can you phrase the problem to focus on needs rather than solutions?'
+    },
+    'Ideate': {
+        tools: ['Brainstorming Board', 'Idea Prioritization Matrix', 'SCAMPER technique'],
+        capabilities: 'brainstorming ideas, evaluating feasibility vs. innovation, and combining concepts',
+        firstQuestion: 'What happens if you flip the problem on its head?'
+    },
+    'Prototype': {
+        tools: ['Storyboards', 'Paper Sketches', 'Wireframes', 'Low-Fi Prototypes'],
+        capabilities: 'building quick prototypes, testing core functions, and simulating user experiences',
+        firstQuestion: 'How can you build the simplest version that still communicates the core idea?'
+    },
+    'Test': {
+        tools: ['Testing Checklists', 'Feedback Forms', 'User Testing Scripts'],
+        capabilities: 'planning user tests, gathering feedback, and deciding whether to iterate or proceed',
+        firstQuestion: 'What assumptions are you testing with your prototype?'
+    }
+};
+
+function getWelcomeMessage(phase) {
+    const info = PHASE_INFO[phase] || PHASE_INFO['Empathize'];
+    return `Hello! 👋 I'm your Socratic Design Thinking Coach, here to guide you through your project.<br><br>` +
+        `You're currently in the <strong>${phase}</strong> phase.<br><br>` +
+        `<strong>In this phase, I can help you with:</strong><br>` +
+        `• ${info.tools.join('<br>• ')}<br><br>` +
+        `I'll be asking thought-provoking questions to help you ${info.capabilities}.<br><br>` +
+        `Ready to dive in? Here's a guiding question to get us started:<br>` +
+        `<em>"${info.firstQuestion}"</em>`;
+}
+
+function getPhaseChangeMessage(phase) {
+    const info = PHASE_INFO[phase] || PHASE_INFO['Empathize'];
+    return `Great! You've moved to the <strong>${phase}</strong> phase. 🎯<br><br>` +
+        `<strong>In this phase, I can help you with:</strong><br>` +
+        `• ${info.tools.join('<br>• ')}<br><br>` +
+        `Let's get started! Here's a guiding question:<br>` +
+        `<em>"${info.firstQuestion}"</em>`;
+}
 
 function ProjectContent() {
     const searchParams = useSearchParams();
@@ -18,6 +69,17 @@ function ProjectContent() {
     const [chatInput, setChatInput] = useState('');
     const [files, setFiles] = useState([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
+    // Confirmation modal state
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [pendingPhase, setPendingPhase] = useState(null);
+
+    // Error/Info modal state
+    const [showErrorModal, setShowErrorModal] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
+
+    // Stage-specific data (empathy map, checklists, etc.)
+    const [stageData, setStageData] = useState({});
 
     // Helper function to save a message to the database
     const saveMessageToDb = async (message) => {
@@ -41,7 +103,7 @@ function ProjectContent() {
                 // Show welcome message if no project ID
                 setMessages([{
                     sender: 'Bot',
-                    text: `Hello! I am the Socratic Bot accompanying the project. Currently, we are in the <strong>${initialPhase}</strong> phase. <br><br>How can you enter your user's inner circle?`
+                    text: getWelcomeMessage(initialPhase)
                 }]);
                 return;
             }
@@ -56,7 +118,7 @@ function ProjectContent() {
                     // No history — send and save welcome message
                     const welcomeMessage = {
                         sender: 'Bot',
-                        text: `Hello! I am the Socratic Bot accompanying the project. Currently, we are in the <strong>${initialPhase}</strong> phase. <br><br>How can you enter your user's inner circle?`,
+                        text: getWelcomeMessage(initialPhase),
                         phase: initialPhase,
                         timestamp: new Date(),
                     };
@@ -68,7 +130,7 @@ function ProjectContent() {
                 // Fallback to welcome message on error
                 setMessages([{
                     sender: 'Bot',
-                    text: `Hello! I am the Socratic Bot accompanying the project. Currently, we are in the <strong>${initialPhase}</strong> phase. <br><br>How can you enter your user's inner circle?`
+                    text: getWelcomeMessage(initialPhase)
                 }]);
             } finally {
                 setIsLoadingHistory(false);
@@ -78,18 +140,69 @@ function ProjectContent() {
         fetchChatHistory();
     }, [projectId, initialPhase]);
 
-    const changePhase = async (phase) => {
+    // Fetch stage data on mount
+    useEffect(() => {
+        const fetchStageData = async () => {
+            if (!projectId) return;
+            try {
+                const response = await fetch(`/api/projects/${projectId}/stageData`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setStageData(data.stageData || {});
+                }
+            } catch (error) {
+                console.error('Failed to fetch stage data:', error);
+            }
+        };
+        fetchStageData();
+    }, [projectId]);
+
+    const changePhase = (phase) => {
         const formattedPhase = phase.charAt(0).toUpperCase() + phase.slice(1);
-        setCurrentPhase(formattedPhase);
+        const phases = ['Empathize', 'Define', 'Ideate', 'Prototype', 'Test'];
+        const currentIndex = phases.indexOf(currentPhase);
+        const targetIndex = phases.indexOf(formattedPhase);
+
+        // Don't do anything if staying on the same phase
+        if (formattedPhase === currentPhase) return;
+
+        // Only allow moving to the NEXT phase (not previous, not skipping ahead)
+        if (targetIndex !== currentIndex + 1) {
+            // Show styled error modal instead of browser alert
+            if (targetIndex < currentIndex) {
+                setErrorMessage("You cannot go back to previous phases. Keep moving forward! 🚀");
+            } else if (targetIndex > currentIndex + 1) {
+                setErrorMessage(`Please complete the ${phases[currentIndex + 1]} phase first before moving to ${formattedPhase}.`);
+            }
+            setShowErrorModal(true);
+            return;
+        }
+
+        // Show confirmation modal for the next phase
+        setPendingPhase(formattedPhase);
+        setShowConfirmModal(true);
+    };
+
+    const confirmPhaseChange = async () => {
+        if (!pendingPhase) return;
+
+        setCurrentPhase(pendingPhase);
+        setShowConfirmModal(false);
 
         const phaseMessage = {
             sender: 'Bot',
-            text: `Switched to <strong>${formattedPhase}</strong> phase. What are your goals for this step?`,
-            phase: formattedPhase,
+            text: getPhaseChangeMessage(pendingPhase),
+            phase: pendingPhase,
             timestamp: new Date(),
         };
         setMessages(prev => [...prev, phaseMessage]);
         await saveMessageToDb(phaseMessage);
+        setPendingPhase(null);
+    };
+
+    const cancelPhaseChange = () => {
+        setShowConfirmModal(false);
+        setPendingPhase(null);
     };
 
     const [isTyping, setIsTyping] = useState(false);
@@ -187,6 +300,97 @@ function ProjectContent() {
 
     return (
         <div className="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
+            {/* Phase Change Confirmation Modal */}
+            {showConfirmModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        onClick={cancelPhaseChange}
+                    ></div>
+
+                    {/* Modal */}
+                    <div className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 transform transition-all animate-in fade-in zoom-in duration-200">
+                        {/* Icon */}
+                        <div className="flex justify-center mb-4">
+                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+                                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        {/* Title */}
+                        <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
+                            Move to {pendingPhase}?
+                        </h3>
+
+                        {/* Description */}
+                        <p className="text-gray-600 text-center mb-6">
+                            Make sure you've completed the key tasks in the <strong>{currentPhase}</strong> phase before moving on.
+                            You can always come back to previous phases if needed.
+                        </p>
+
+                        {/* Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={cancelPhaseChange}
+                                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                            >
+                                Stay Here
+                            </button>
+                            <button
+                                onClick={confirmPhaseChange}
+                                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/30"
+                            >
+                                Yes, Continue
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Error/Info Modal */}
+            {showErrorModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        onClick={() => setShowErrorModal(false)}
+                    ></div>
+
+                    {/* Modal */}
+                    <div className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 transform transition-all">
+                        {/* Icon */}
+                        <div className="flex justify-center mb-4">
+                            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
+                                <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        {/* Title */}
+                        <h3 className="text-xl font-bold text-center text-gray-900 mb-2">
+                            Hold On! ✋
+                        </h3>
+
+                        {/* Description */}
+                        <p className="text-gray-600 text-center mb-6">
+                            {errorMessage}
+                        </p>
+
+                        {/* Button */}
+                        <button
+                            onClick={() => setShowErrorModal(false)}
+                            className="w-full px-4 py-3 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 transition-colors shadow-lg shadow-amber-500/30"
+                        >
+                            Got it!
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Nav */}
             <nav className="bg-white shadow-sm border-b border-gray-200 z-10 shrink-0">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -223,14 +427,48 @@ function ProjectContent() {
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-lg shadow p-6 mb-6">
+                    {/* Phase-specific content area with dynamic colors */}
+                    <div className={`rounded-xl shadow-lg p-6 mb-6 transition-colors duration-300 ${currentPhase === 'Empathize' ? 'bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200' :
+                            currentPhase === 'Define' ? 'bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200' :
+                                currentPhase === 'Ideate' ? 'bg-gradient-to-br from-yellow-50 to-orange-50 border border-yellow-200' :
+                                    currentPhase === 'Prototype' ? 'bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200' :
+                                        'bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-200'
+                        }`}>
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-bold text-gray-800">Phase: {currentPhase}</h3>
+                            <div className="flex items-center gap-3">
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${currentPhase === 'Empathize' ? 'bg-purple-200' :
+                                        currentPhase === 'Define' ? 'bg-blue-200' :
+                                            currentPhase === 'Ideate' ? 'bg-yellow-200' :
+                                                currentPhase === 'Prototype' ? 'bg-green-200' :
+                                                    'bg-indigo-200'
+                                    }`}>
+                                    {currentPhase === 'Empathize' && '💜'}
+                                    {currentPhase === 'Define' && '🎯'}
+                                    {currentPhase === 'Ideate' && '💡'}
+                                    {currentPhase === 'Prototype' && '🛠️'}
+                                    {currentPhase === 'Test' && '🧪'}
+                                </div>
+                                <div>
+                                    <h3 className={`text-xl font-bold ${currentPhase === 'Empathize' ? 'text-purple-800' :
+                                            currentPhase === 'Define' ? 'text-blue-800' :
+                                                currentPhase === 'Ideate' ? 'text-yellow-800' :
+                                                    currentPhase === 'Prototype' ? 'text-green-800' :
+                                                        'text-indigo-800'
+                                        }`}>Phase: {currentPhase}</h3>
+                                    <p className="text-sm text-gray-600">
+                                        {currentPhase === 'Empathize' && 'Understand your users deeply'}
+                                        {currentPhase === 'Define' && 'Define the core problem'}
+                                        {currentPhase === 'Ideate' && 'Generate creative solutions'}
+                                        {currentPhase === 'Prototype' && 'Build quick prototypes'}
+                                        {currentPhase === 'Test' && 'Test and iterate'}
+                                    </p>
+                                </div>
+                            </div>
                             <SharePopover
                                 projectId={projectId}
                                 triggerButton={
                                     <button
-                                        className="flex items-center gap-2 text-sm bg-indigo-50 text-indigo-700 px-3 py-2 rounded-md hover:bg-indigo-100 transition-colors"
+                                        className="flex items-center gap-2 text-sm bg-white/80 text-gray-700 px-3 py-2 rounded-md hover:bg-white transition-colors shadow"
                                     >
                                         Share Project
                                     </button>
@@ -238,32 +476,54 @@ function ProjectContent() {
                             />
                         </div>
 
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50 transition-colors"
-                            onClick={() => document.getElementById('file-upload')?.click()}
-                        >
-                            <p className="mt-1 text-sm text-gray-600">
-                                <span className="font-medium text-blue-600 hover:text-blue-500 focus:outline-none cursor-pointer">Upload a file</span>
-                                or drag and drop
-                            </p>
-                            <input id="file-upload" type="file" className="hidden" multiple onChange={handleFileUpload} />
-                        </div>
-
-                        {files.length > 0 && (
-                            <div className="mt-6">
-                                <h4 className="text-sm font-medium text-gray-700 mb-3">Uploaded Files:</h4>
-                                <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                    {files.map((f, i) => (
-                                        <li key={i} className="col-span-1 bg-white border rounded-lg shadow-sm p-4 flex items-center">
-                                            <div className="bg-blue-100 p-2 rounded text-blue-600 font-bold text-xs">FILE</div>
-                                            <div className="ml-3">
-                                                <p className="text-sm font-medium text-gray-900">{f.name}</p>
-                                                <p className="text-xs text-gray-500">{f.size}</p>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
+                        {/* Empathize Stage - Show Empathy Map */}
+                        {currentPhase === 'Empathize' && projectId && (
+                            <EmpathyMap
+                                projectId={projectId}
+                                data={stageData}
+                                onUpdate={setStageData}
+                            />
                         )}
+
+                        {/* Checklist for current stage */}
+                        {projectId && (
+                            <StageChecklist
+                                projectId={projectId}
+                                stage={currentPhase}
+                                data={stageData}
+                                onUpdate={setStageData}
+                            />
+                        )}
+
+                        {/* File upload area */}
+                        <div className="bg-white rounded-xl shadow p-6">
+                            <h4 className="text-sm font-medium text-gray-700 mb-3">Upload Research Files</h4>
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition-colors"
+                                onClick={() => document.getElementById('file-upload')?.click()}
+                            >
+                                <p className="text-sm text-gray-600">
+                                    <span className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer">Upload a file</span>
+                                    {' '}or drag and drop
+                                </p>
+                                <input id="file-upload" type="file" className="hidden" multiple onChange={handleFileUpload} />
+                            </div>
+
+                            {files.length > 0 && (
+                                <div className="mt-4">
+                                    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        {files.map((f, i) => (
+                                            <li key={i} className="bg-gray-50 border rounded-lg p-3 flex items-center">
+                                                <div className="bg-blue-100 p-2 rounded text-blue-600 font-bold text-xs">FILE</div>
+                                                <div className="ml-3">
+                                                    <p className="text-sm font-medium text-gray-900">{f.name}</p>
+                                                    <p className="text-xs text-gray-500">{f.size}</p>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </main>
 
