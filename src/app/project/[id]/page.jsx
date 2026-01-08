@@ -28,13 +28,20 @@ function ProjectContent() {
         const user = JSON.parse(userStr);
         setCurrentUser(user);
 
-        // Fetch project details
-        fetchProject();
+        // Fetch project details - pass user directly to avoid race condition
+        fetchProject(user);
     }, [projectId]);
 
-    const fetchProject = async () => {
+    const fetchProject = async (user) => {
+        // Use provided user or fallback to currentUser state
+        const username = user?.username || currentUser?.username;
+        if (!username) {
+            setError('User not found');
+            setLoading(false);
+            return;
+        }
         try {
-            const res = await fetch(`/api/projects/${projectId}?user=${encodeURIComponent(currentUser.username)}`);
+            const res = await fetch(`/api/projects/${projectId}?user=${encodeURIComponent(username)}`);
             if (res.ok) {
                 const projectData = await res.json();
                 setProject(projectData);
