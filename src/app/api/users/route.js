@@ -9,11 +9,26 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const role = searchParams.get('role');
 
+        console.log('----------------------------------------');
+        console.log('🔍 Fetching users with role filter:', role || 'none');
+
         const query = role ? { role } : {};
+        console.log('   Query:', JSON.stringify(query));
+
         const users = await User.find(query).select('-password'); // Exclude passwords
+        console.log('   Found users:', users.length);
+
+        // Debug: if searching for students and none found, check all users' roles
+        if (role === 'student' && users.length === 0) {
+            const allUsers = await User.find({}).select('username role');
+            console.log('   ⚠️ No students found. All users roles:');
+            allUsers.forEach(u => console.log(`      - ${u.username}: role="${u.role}"`));
+        }
+        console.log('----------------------------------------');
 
         return NextResponse.json(users);
     } catch (error) {
+        console.error('❌ Error fetching users:', error);
         return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
     }
 }
