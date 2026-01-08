@@ -1,11 +1,13 @@
 
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useReactToPrint } from 'react-to-print';
 import SharePopover from '@/components/SharePopover';
 import EmpathyMap from '@/components/EmpathyMap';
 import StageChecklist from '@/components/StageChecklist';
+import ProjectPDFExport from '@/components/ProjectPDFExport';
 
 // Phase-specific information for the chatbot
 const PHASE_INFO = {
@@ -139,6 +141,98 @@ function ProjectContent() {
 
     // Desktop chat minimized state
     const [isChatMinimized, setIsChatMinimized] = useState(false);
+
+    // PDF Export
+    const pdfContentRef = useRef(null);
+    const handlePrint = useReactToPrint({
+        contentRef: pdfContentRef,
+        documentTitle: `${initialName} - Design Thinking Report`,
+    });
+
+    // File Upload State & Handlers
+    const [isUploading, setIsUploading] = useState(false);
+
+    const fetchFiles = async () => {
+        if (!projectId) return;
+        try {
+            const res = await fetch(`/api/projects/${projectId}/files`);
+            if (res.ok) {
+                const data = await res.json();
+                setFiles(data.files);
+            }
+        } catch (error) {
+            console.error('Failed to fetch files:', error);
+        }
+    };
+
+    // Fetch files on load
+    useEffect(() => {
+        if (projectId) {
+            fetchFiles();
+        }
+    }, [projectId]);
+
+    const handleFileUpload = async (e) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+
+        setIsUploading(true);
+        const file = e.target.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Get username from local storage
+        try {
+            const userStr = localStorage.getItem('currentUser');
+            if (userStr) {
+                const user = JSON.parse(userStr);
+                formData.append('uploadedBy', user.username);
+            }
+        } catch (err) {
+            console.error('Error getting user', err);
+        }
+
+        try {
+            const res = await fetch(`/api/projects/${projectId}/files`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (res.ok) {
+                await fetchFiles();
+                // Clear input
+                e.target.value = null;
+            } else {
+                const errorData = await res.json();
+                setErrorMessage(errorData.error || 'Failed to upload file');
+                setShowErrorModal(true);
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            setErrorMessage('An unexpected error occurred during upload');
+            setShowErrorModal(true);
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleDeleteFile = async (publicId) => {
+        if (!confirm('Are you sure you want to delete this file?')) return;
+
+        try {
+            const res = await fetch(`/api/projects/${projectId}/files?publicId=${publicId}`, {
+                method: 'DELETE',
+            });
+
+            if (res.ok) {
+                setFiles(files.filter(f => f.publicId !== publicId));
+            } else {
+                alert('Failed to delete file');
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert('Error deleting file');
+        }
+    };
 
     // Helper function to save a message to the database
     const saveMessageToDb = async (message) => {
@@ -383,16 +477,7 @@ function ProjectContent() {
         }
     };
 
-    const handleFileUpload = (e) => {
-        if (e.target.files && e.target.files.length > 0) {
-            const newFiles = Array.from(e.target.files).map(file => ({
-                name: file.name,
-                size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
-                date: 'Just now'
-            }));
-            setFiles(prev => [...prev, ...newFiles]);
-        }
-    };
+
 
 
 
@@ -637,16 +722,28 @@ function ProjectContent() {
                                     </p>
                                 </div>
                             </div>
-                            <SharePopover
-                                projectId={projectId}
-                                triggerButton={
-                                    <button
-                                        className="flex items-center gap-2 text-sm bg-white/80 text-gray-700 px-3 py-2 rounded-md hover:bg-white transition-colors shadow"
-                                    >
-                                        Share Project
-                                    </button>
-                                }
-                            />
+                            <div className="flex items-center gap-2">
+                                {/* Export PDF Button */}
+                                <button
+                                    onClick={handlePrint}
+                                    className="flex items-center gap-2 text-sm bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 transition-colors shadow"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Export PDF
+                                </button>
+                                <SharePopover
+                                    projectId={projectId}
+                                    triggerButton={
+                                        <button
+                                            className="flex items-center gap-2 text-sm bg-white/80 text-gray-700 px-3 py-2 rounded-md hover:bg-white transition-colors shadow"
+                                        >
+                                            Share Project
+                                        </button>
+                                    }
+                                />
+                            </div>
                         </div>
 
                         {/* Empathize Stage - Show Empathy Map */}
@@ -668,29 +765,62 @@ function ProjectContent() {
                             />
                         )}
 
+
                         {/* File upload area */}
                         <div className="bg-white rounded-xl shadow p-6">
                             <h4 className="text-sm font-medium text-gray-700 mb-3">Upload Research Files</h4>
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition-colors"
-                                onClick={() => document.getElementById('file-upload')?.click()}
+                            <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${isUploading ? 'bg-gray-50 border-gray-300' : 'border-gray-300 hover:bg-gray-50 cursor-pointer'}`}
+                                onClick={() => !isUploading && document.getElementById('file-upload')?.click()}
                             >
-                                <p className="text-sm text-gray-600">
-                                    <span className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer">Upload a file</span>
-                                    {' '}or drag and drop
-                                </p>
-                                <input id="file-upload" type="file" className="hidden" multiple onChange={handleFileUpload} />
+                                {isUploading ? (
+                                    <div className="flex flex-col items-center">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                                        <p className="text-sm text-gray-600">Uploading...</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <p className="text-sm text-gray-600">
+                                            <span className="font-medium text-blue-600 hover:text-blue-500">Upload a file</span>
+                                            {' '}or drag and drop
+                                        </p>
+                                        <p className="text-xs text-gray-400 mt-1">Images, PDF, Text (Max 10MB)</p>
+                                    </>
+                                )}
+                                <input id="file-upload" type="file" className="hidden" multiple onChange={handleFileUpload} disabled={isUploading} />
                             </div>
 
                             {files.length > 0 && (
                                 <div className="mt-4">
                                     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                         {files.map((f, i) => (
-                                            <li key={i} className="bg-gray-50 border rounded-lg p-3 flex items-center">
-                                                <div className="bg-blue-100 p-2 rounded text-blue-600 font-bold text-xs">FILE</div>
-                                                <div className="ml-3">
-                                                    <p className="text-sm font-medium text-gray-900">{f.name}</p>
-                                                    <p className="text-xs text-gray-500">{f.size}</p>
+                                            <li key={i} className="bg-gray-50 border rounded-lg p-3 flex items-start justify-between group">
+                                                <div className="flex items-center flex-1 min-w-0">
+                                                    <div className={`p-2 rounded font-bold text-xs flex-shrink-0 ${f.fileType === 'image' ? 'bg-purple-100 text-purple-600' :
+                                                        f.fileType === 'pdf' ? 'bg-red-100 text-red-600' :
+                                                            'bg-blue-100 text-blue-600'
+                                                        }`}>
+                                                        {f.fileType === 'image' ? 'IMG' : f.fileType === 'pdf' ? 'PDF' : 'DOC'}
+                                                    </div>
+                                                    <div className="ml-3 flex-1 min-w-0">
+                                                        <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-gray-900 hover:text-blue-600 truncate block" title={f.name}>
+                                                            {f.name}
+                                                        </a>
+                                                        <p className="text-xs text-gray-500 flex items-center gap-2">
+                                                            {f.size ? (f.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size'}
+                                                            <span>•</span>
+                                                            {new Date(f.uploadedAt).toLocaleDateString()}
+                                                        </p>
+                                                    </div>
                                                 </div>
+                                                <button
+                                                    onClick={() => handleDeleteFile(f.publicId)}
+                                                    className="p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Delete file"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
                                             </li>
                                         ))}
                                     </ul>
@@ -798,6 +928,19 @@ function ProjectContent() {
                         </div>
                     </aside>
                 )}
+            </div>
+
+            {/* Hidden PDF Export Component */}
+            <div style={{ display: 'none' }}>
+                <ProjectPDFExport
+                    ref={pdfContentRef}
+                    projectName={initialName}
+                    currentPhase={currentPhase}
+                    stageData={stageData}
+                    messages={messages}
+                    createdBy={localStorage.getItem('currentUser') ? JSON.parse(localStorage.getItem('currentUser'))?.username : 'Unknown'}
+                    createdAt={new Date()}
+                />
             </div>
 
         </div>

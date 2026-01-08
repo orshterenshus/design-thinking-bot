@@ -104,7 +104,18 @@ const ProjectSchema = new mongoose.Schema({
                 }
             }
         }
-    }
+    },
+
+    // Uploaded files stored in Cloudinary
+    files: [{
+        name: { type: String, required: true },
+        url: { type: String, required: true },
+        publicId: { type: String, required: true },
+        fileType: { type: String, enum: ['image', 'pdf', 'text', 'other'], default: 'other' },
+        size: { type: Number },
+        uploadedAt: { type: Date, default: Date.now },
+        uploadedBy: { type: String }
+    }]
 });
 
 export default mongoose.models.Project || mongoose.model('Project', ProjectSchema);

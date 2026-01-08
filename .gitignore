@@ -2,5 +2,6 @@ node_modules/*
 lib/node_modules/*
 .next/*
 .vite/*
+.env
 .env.local
 
