@@ -64,7 +64,10 @@ function ProjectContent() {
     const initialPhase = searchParams.get('phase') || 'Empathize';
     const projectId = searchParams.get('id');
 
-    const [currentPhase, setCurrentPhase] = useState(initialPhase);
+    // For existing projects, start with null phase and load from DB
+    // For new projects (no projectId), use the URL param
+    const [currentPhase, setCurrentPhase] = useState(projectId ? null : initialPhase);
+    const [isLoadingPhase, setIsLoadingPhase] = useState(!!projectId);
     const [messages, setMessages] = useState([]);
     const [chatInput, setChatInput] = useState('');
     const [files, setFiles] = useState([]);
@@ -140,7 +143,7 @@ function ProjectContent() {
         fetchChatHistory();
     }, [projectId, initialPhase]);
 
-    // Fetch stage data on mount
+    // Fetch stage data AND saved phase on mount
     useEffect(() => {
         const fetchStageData = async () => {
             if (!projectId) return;
@@ -148,10 +151,22 @@ function ProjectContent() {
                 const response = await fetch(`/api/projects/${projectId}/stageData`);
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('Loaded stageData from DB:', data);
                     setStageData(data.stageData || {});
+                    // Load saved phase from database - this is the source of truth
+                    const savedPhase = data.phase || 'Empathize';
+                    console.log('Setting phase from DB:', savedPhase);
+                    setCurrentPhase(savedPhase);
+                } else {
+                    // If fetch fails, default to Empathize
+                    setCurrentPhase('Empathize');
                 }
             } catch (error) {
                 console.error('Failed to fetch stage data:', error);
+                // On error, default to Empathize
+                setCurrentPhase('Empathize');
+            } finally {
+                setIsLoadingPhase(false);
             }
         };
         fetchStageData();
@@ -188,6 +203,21 @@ function ProjectContent() {
 
         setCurrentPhase(pendingPhase);
         setShowConfirmModal(false);
+
+        // Save phase to database
+        if (projectId) {
+            try {
+                const user = localStorage.getItem('loggedInUser');
+                await fetch(`/api/projects/${projectId}?user=${user}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phase: pendingPhase })
+                });
+                console.log('Phase saved to DB:', pendingPhase);
+            } catch (error) {
+                console.error('Failed to save phase:', error);
+            }
+        }
 
         const phaseMessage = {
             sender: 'Bot',
@@ -297,6 +327,18 @@ function ProjectContent() {
             return "bg-white border-2 border-gray-300 text-gray-500";
         }
     };
+
+    // Show loading state while phase is being fetched
+    if (isLoadingPhase) {
+        return (
+            <div className="bg-gray-50 text-gray-800 font-sans h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading project...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-gray-50 text-gray-800 font-sans h-screen flex flex-col overflow-hidden">
@@ -429,18 +471,18 @@ function ProjectContent() {
 
                     {/* Phase-specific content area with dynamic colors */}
                     <div className={`rounded-xl shadow-lg p-6 mb-6 transition-colors duration-300 ${currentPhase === 'Empathize' ? 'bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200' :
-                            currentPhase === 'Define' ? 'bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200' :
-                                currentPhase === 'Ideate' ? 'bg-gradient-to-br from-yellow-50 to-orange-50 border border-yellow-200' :
-                                    currentPhase === 'Prototype' ? 'bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200' :
-                                        'bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-200'
+                        currentPhase === 'Define' ? 'bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200' :
+                            currentPhase === 'Ideate' ? 'bg-gradient-to-br from-yellow-50 to-orange-50 border border-yellow-200' :
+                                currentPhase === 'Prototype' ? 'bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200' :
+                                    'bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-200'
                         }`}>
                         <div className="flex justify-between items-center mb-4">
                             <div className="flex items-center gap-3">
                                 <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${currentPhase === 'Empathize' ? 'bg-purple-200' :
-                                        currentPhase === 'Define' ? 'bg-blue-200' :
-                                            currentPhase === 'Ideate' ? 'bg-yellow-200' :
-                                                currentPhase === 'Prototype' ? 'bg-green-200' :
-                                                    'bg-indigo-200'
+                                    currentPhase === 'Define' ? 'bg-blue-200' :
+                                        currentPhase === 'Ideate' ? 'bg-yellow-200' :
+                                            currentPhase === 'Prototype' ? 'bg-green-200' :
+                                                'bg-indigo-200'
                                     }`}>
                                     {currentPhase === 'Empathize' && '💜'}
                                     {currentPhase === 'Define' && '🎯'}
@@ -450,10 +492,10 @@ function ProjectContent() {
                                 </div>
                                 <div>
                                     <h3 className={`text-xl font-bold ${currentPhase === 'Empathize' ? 'text-purple-800' :
-                                            currentPhase === 'Define' ? 'text-blue-800' :
-                                                currentPhase === 'Ideate' ? 'text-yellow-800' :
-                                                    currentPhase === 'Prototype' ? 'text-green-800' :
-                                                        'text-indigo-800'
+                                        currentPhase === 'Define' ? 'text-blue-800' :
+                                            currentPhase === 'Ideate' ? 'text-yellow-800' :
+                                                currentPhase === 'Prototype' ? 'text-green-800' :
+                                                    'text-indigo-800'
                                         }`}>Phase: {currentPhase}</h3>
                                     <p className="text-sm text-gray-600">
                                         {currentPhase === 'Empathize' && 'Understand your users deeply'}

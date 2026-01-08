@@ -6,9 +6,9 @@ import { NextResponse } from 'next/server';
 export async function GET(request, { params }) {
     try {
         await dbConnect();
-        const { id } = await params; // params is a Promise in Next.js 15
+        const { id } = await params;
 
-        const project = await Project.findById(id);
+        const project = await Project.findById(id).lean();
 
         if (!project) {
             return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
 
         return NextResponse.json({
             stageData: project.stageData || {},
-            phase: project.phase
+            phase: project.phase || 'Empathize'
         });
     } catch (error) {
         console.error('Error fetching stage data:', error);
@@ -24,7 +24,7 @@ export async function GET(request, { params }) {
     }
 }
 
-// PUT - Update stage data for a project
+// PUT - Update entire stage data for a phase
 export async function PUT(request, { params }) {
     try {
         await dbConnect();
@@ -36,14 +36,13 @@ export async function PUT(request, { params }) {
             return NextResponse.json({ error: 'Stage and data are required' }, { status: 400 });
         }
 
-        // Build the update path dynamically
         const updatePath = `stageData.${stage}`;
 
         const project = await Project.findByIdAndUpdate(
             id,
             { $set: { [updatePath]: data } },
-            { new: true, upsert: true }
-        );
+            { new: true }
+        ).lean();
 
         if (!project) {
             return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -51,7 +50,7 @@ export async function PUT(request, { params }) {
 
         return NextResponse.json({
             message: 'Stage data updated successfully',
-            stageData: project.stageData
+            stageData: project.stageData || {}
         });
     } catch (error) {
         console.error('Error updating stage data:', error);
@@ -59,7 +58,7 @@ export async function PUT(request, { params }) {
     }
 }
 
-// PATCH - Update specific field within stage data (for checklist items, adding notes, etc.)
+// PATCH - Update specific field within stage data (for checklist items, etc.)
 export async function PATCH(request, { params }) {
     try {
         await dbConnect();
@@ -67,46 +66,41 @@ export async function PATCH(request, { params }) {
         const body = await request.json();
         const { stage, field, value, action } = body;
 
+        console.log('PATCH stageData:', { id, stage, field, value, action });
+
         if (!stage || !field) {
             return NextResponse.json({ error: 'Stage and field are required' }, { status: 400 });
         }
 
-        let updateQuery;
         const fieldPath = `stageData.${stage}.${field}`;
-
-        // Handle different actions
-        let queryOptions = { new: true };
-        let findQuery = { _id: id };
+        let updateQuery;
 
         if (action === 'push') {
-            // Add item to array
             updateQuery = { $push: { [fieldPath]: value } };
         } else if (action === 'pull') {
-            // Remove item from array by id
             updateQuery = { $pull: { [fieldPath]: { id: value.id } } };
-        } else if (action === 'update_in_array') {
-            // Update specific item in array (e.g., toggle checked)
-            // Need to find the document AND the specific array element
-            findQuery = { _id: id, [`${fieldPath}.id`]: value.id };
-            updateQuery = { $set: { [`${fieldPath}.$.${value.fieldToUpdate}`]: value.newValue } };
         } else {
-            // Default: set the value directly
+            // Default: set the value directly using $set
             updateQuery = { $set: { [fieldPath]: value } };
         }
 
-        const project = await Project.findOneAndUpdate(
-            findQuery,
+        console.log('Update query:', JSON.stringify(updateQuery));
+
+        const project = await Project.findByIdAndUpdate(
+            id,
             updateQuery,
-            queryOptions
-        );
+            { new: true, upsert: false }
+        ).lean();
 
         if (!project) {
             return NextResponse.json({ error: 'Project not found' }, { status: 404 });
         }
 
+        console.log('Updated stageData:', JSON.stringify(project.stageData, null, 2));
+
         return NextResponse.json({
             message: 'Stage data updated successfully',
-            stageData: project.stageData
+            stageData: project.stageData || {}
         });
     } catch (error) {
         console.error('Error patching stage data:', error);

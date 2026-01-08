@@ -132,8 +132,8 @@ export default function StageChecklist({ projectId, stage, data, onUpdate }) {
                         <label
                             key={item.key}
                             className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${isChecked
-                                    ? 'bg-purple-50 border border-purple-200'
-                                    : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                                ? 'bg-purple-50 border border-purple-200'
+                                : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
                                 }`}
                         >
                             <input

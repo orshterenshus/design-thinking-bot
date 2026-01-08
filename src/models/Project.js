@@ -53,61 +53,25 @@ const ProjectSchema = new mongoose.Schema({
     }],
 
     // Stage-specific data for each Design Thinking phase
+    // Using Mixed type to allow flexible nested updates
     stageData: {
-        empathize: {
-            empathyMap: {
-                says: [{
-                    id: String,
-                    text: String,
-                    createdAt: { type: Date, default: Date.now }
-                }],
-                thinks: [{
-                    id: String,
-                    text: String,
-                    createdAt: { type: Date, default: Date.now }
-                }],
-                does: [{
-                    id: String,
-                    text: String,
-                    createdAt: { type: Date, default: Date.now }
-                }],
-                feels: [{
-                    id: String,
-                    text: String,
-                    createdAt: { type: Date, default: Date.now }
-                }]
+        type: mongoose.Schema.Types.Mixed,
+        default: {
+            empathize: {
+                empathyMap: { says: [], thinks: [], does: [], feels: [] },
+                checklist: { conductedInterviews: false, documentedObservations: false, completedEmpathyMap: false }
             },
-            checklist: {
-                conductedInterviews: { type: Boolean, default: false },
-                documentedObservations: { type: Boolean, default: false },
-                completedEmpathyMap: { type: Boolean, default: false }
-            }
-        },
-        define: {
-            checklist: {
-                createdPersona: { type: Boolean, default: false },
-                definedProblem: { type: Boolean, default: false },
-                createdHMW: { type: Boolean, default: false }
-            }
-        },
-        ideate: {
-            checklist: {
-                brainstormed: { type: Boolean, default: false },
-                prioritizedIdeas: { type: Boolean, default: false },
-                selectedTopIdea: { type: Boolean, default: false }
-            }
-        },
-        prototype: {
-            checklist: {
-                builtPrototype: { type: Boolean, default: false },
-                definedTestGoals: { type: Boolean, default: false }
-            }
-        },
-        test: {
-            checklist: {
-                conductedTests: { type: Boolean, default: false },
-                gatheredFeedback: { type: Boolean, default: false },
-                documentedLearnings: { type: Boolean, default: false }
+            define: {
+                checklist: { createdPersona: false, definedProblem: false, createdHMW: false }
+            },
+            ideate: {
+                checklist: { brainstormed: false, prioritizedIdeas: false, selectedTopIdea: false }
+            },
+            prototype: {
+                checklist: { builtPrototype: false, definedTestGoals: false }
+            },
+            test: {
+                checklist: { conductedTests: false, gatheredFeedback: false, documentedLearnings: false }
             }
         }
     }

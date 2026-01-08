@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 export async function GET(request, { params }) {
     try {
         await dbConnect();
-        const { id } = params;
+        const { id } = await params;
         const { searchParams } = new URL(request.url);
         const requestingUser = searchParams.get('user');
 
@@ -34,7 +34,7 @@ export async function GET(request, { params }) {
 export async function PATCH(request, { params }) {
     try {
         await dbConnect();
-        const { id } = params;
+        const { id } = await params;
         const body = await request.json();
         const { searchParams } = new URL(request.url);
         const requestingUser = searchParams.get('user');
@@ -95,7 +95,9 @@ export async function PATCH(request, { params }) {
         }
 
         if (body.phase) {
-            updateQuery.phase = body.phase;
+            console.log('Updating phase to:', body.phase);
+            if (!updateQuery.$set) updateQuery.$set = {};
+            updateQuery.$set.phase = body.phase;
         }
 
         // Apply other updates if creator/owner
